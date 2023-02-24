@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "test-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: create linux artifacts
+        run: make vm-switch
+        env:
+          CGO_ENABLED: "0"
+      - run: >-
+          tar -czf rancher-desktop-networking-${{ github.ref_name }}.tar.gz
+          rancher-desktop-networking
+      - uses: actions/upload-artifact@v3
+        with:
+          name: rancher-desktop-networking.tar.gz
+          path: rancher-desktop-networking-${{ github.ref_name }}.tar.gz
+          if-no-files-found: error
+      - name: create windows artifacts
+        run: make host-switch
+        env:
+          CGO_ENABLED: "0"
+      - run: >-
+          zip -r rancher-desktop-networking-${{ github.ref_name }}.zip
+          rancher-desktop-networking
+      - uses: actions/upload-artifact@v3
+        with:
+          name: rancher-desktop-networking.zip
+          path: rancher-desktop-networking-${{ github.ref_name }}.zip
+          if-no-files-found: error
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: rancher-desktop-networking.tar.gz
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          gh release create
+          "${{ github.ref_name }}"
+          rancher-desktop-networking-${{ github.ref_name }}.tar.gz
+          --draft
+          --title "${{ github.ref_name }}"
+          --repo ${{ github.repository }}
